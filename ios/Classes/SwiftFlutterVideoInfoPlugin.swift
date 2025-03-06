@@ -36,25 +36,37 @@ private func getVidInfo(path: String, result: FlutterResult) {
   // Handle creation date with original timezone
   var dateString: String = ""
   if let creationDateItem = asset.creationDate {
-    if let metadataDateString = creationDateItem.value as? String {
-      // Try parsing the date string with timezone (e.g., "2023-01-01T12:00:00+0900")
-      let isoFormatter = ISO8601DateFormatter()
-      isoFormatter.formatOptions = [.withInternetDateTime, .withTimeZone]
-      if let date = isoFormatter.date(from: metadataDateString) {
-        // Extract timezone from the string or use device's current as fallback
+  if let metadataDateString = creationDateItem.value as? String {
+    let isoFormatter = ISO8601DateFormatter()
+    isoFormatter.formatOptions = [.withInternetDateTime, .withTimeZone]
+    if let date = isoFormatter.date(from: metadataDateString) {
+      // Extract timezone offset from the string
+      if let range = metadataDateString.range(of: #"[+-]\d{4}"#, options: .regularExpression) {
+        let offsetStr = String(metadataDateString[range]) // e.g., "+0900"
+        let hours = Int(offsetStr.prefix(3)) ?? 0
+        let minutes = Int(offsetStr.suffix(2)) ?? 0
+        let secondsOffset = hours * 3600 + minutes * 60
+        if let timezone = TimeZone(secondsFromGMT: secondsOffset) {
+          let formatter = DateFormatter()
+          formatter.timeZone = timezone
+          formatter.dateFormat = "yyyy-MM-dd HH:mm:ss Z"
+          dateString = formatter.string(from: date)
+        }
+      } else {
+        // Fallback to UTC if no offset is found in string
         let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss Z" // Include offset in output
-        formatter.timeZone = TimeZone.current // Replace with parsed timezone if available
+        formatter.timeZone = TimeZone(identifier: "UTC")
+        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss Z"
         dateString = formatter.string(from: date)
       }
-    } else if let date = creationDateItem.dateValue {
-      // Fallback to UTC if no timezone info is in metadata
-      let formatter = DateFormatter()
-      formatter.timeZone = TimeZone(identifier: "UTC")
-      formatter.dateFormat = "yyyy-MM-dd HH:mm:ss Z"
-      dateString = formatter.string(from: date)
     }
+  } else if let date = creationDateItem.dateValue {
+    let formatter = DateFormatter()
+    formatter.timeZone = TimeZone(identifier: "UTC")
+    formatter.dateFormat = "yyyy-MM-dd HH:mm:ss Z"
+    dateString = formatter.string(from: date)
   }
+}
 
   let durationTime = round(CMTimeGetSeconds(asset.duration) * 1000)
   let tracks = asset.tracks(withMediaType: .video)
